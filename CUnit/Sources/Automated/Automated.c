@@ -54,7 +54,7 @@
 #include <assert.h>
 #include <string.h>
 #include <limits.h>
-#include <time.h>
+#include <sys/time.h>
 
 #include "CUnit.h"
 #include "TestDB.h"
@@ -63,6 +63,8 @@
 #include "TestRun.h"
 #include "Automated.h"
 #include "CUnit_intl.h"
+
+#include "timing_utils.h"
 
 #define MAX_FILENAME_LENGTH		1025
 
@@ -79,6 +81,8 @@ static CU_BOOL f_bWriting_CUNIT_RUN_SUITE = CU_FALSE;       /**< Flag for keepin
 
 static CU_BOOL   bJUnitXmlOutput = CU_FALSE;                /**< Flag for toggling the xml junit output or keeping the original. Off is the default */
 static char _gPackageName[50] = "";
+
+struct timespec tstart, tend;
 
 /*=================================================================
  *  Static function forward declarations
@@ -99,6 +103,7 @@ static void automated_suite_cleanup_failure_message_handler(const CU_pSuite pSui
 /*=================================================================
  *  Public Interface functions
  *=================================================================*/
+
 void CU_automated_run_tests(void)
 {
   assert(NULL != CU_get_registry());
@@ -253,6 +258,10 @@ static void automated_test_start_message_handler(const CU_pTest pTest, const CU_
 	char *szTempName = NULL;
 	size_t szTempName_len = 0;
 
+  //BEGIN TEST
+  struct timespec clk;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &tstart);
+
   CU_UNREFERENCED_PARAMETER(pTest);   /* not currently used */
 
   assert(NULL != pTest);
@@ -302,6 +311,8 @@ static void automated_test_start_message_handler(const CU_pTest pTest, const CU_
   }
 }
 
+
+
 /*------------------------------------------------------------------------*/
 /** Handler function called at completion of each test.
  * @param pTest   The test being run (non-NULL).
@@ -312,6 +323,13 @@ static void automated_test_complete_message_handler(const CU_pTest pTest,
                                                     const CU_pSuite pSuite,
                                                     const CU_pFailureRecord pFailure)
 {
+
+  //END TEST
+  struct timespec clk;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &tend);
+
+  double time_spent = ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
+
   char *szTemp = NULL;
   size_t szTemp_len = 0;
   size_t cur_len = 0;
@@ -340,10 +358,11 @@ static void automated_test_complete_message_handler(const CU_pTest pTest,
           szTemp[0] = '\0';
         }
 
-        fprintf(f_pTestResultFile, "        <testcase classname=\"%s.%s\" name=\"%s\" time=\"0\">\n",
+        fprintf(f_pTestResultFile, "        <testcase classname=\"%s.%s\" name=\"%s\" time=\"%f\">\n",
                 pPackageName,
                 pSuite->pName,
-                (NULL != pTest->pName) ? pTest->pName : "");
+                (NULL != pTest->pName) ? pTest->pName : "",
+		time_spent);
         fprintf(f_pTestResultFile, "            <failure message=\"%s\" type=\"Failure\">\n", szTemp);
       } /* if */
     }
@@ -385,12 +404,13 @@ static void automated_test_complete_message_handler(const CU_pTest pTest,
               "        <CUNIT_RUN_TEST_RECORD> \n"
               "          <CUNIT_RUN_TEST_FAILURE> \n"
               "            <TEST_NAME> %s </TEST_NAME> \n"
+	      "		   <TEST_TIME> %f </TEST_TIME> \n"
               "            <FILE_NAME> %s </FILE_NAME> \n"
               "            <LINE_NUMBER> %u </LINE_NUMBER> \n"
               "            <CONDITION> %s </CONDITION> \n"
               "          </CUNIT_RUN_TEST_FAILURE> \n"
               "        </CUNIT_RUN_TEST_RECORD> \n",
-              pTest->pName,
+              pTest->pName, time_spent,
               (NULL != pTempFailure->strFileName) ? pTempFailure->strFileName : "",
               pTempFailure->uiLineNumber,
               szTemp);
@@ -405,18 +425,20 @@ static void automated_test_complete_message_handler(const CU_pTest pTest,
   }
   else {
     if (bJUnitXmlOutput == CU_TRUE) {
-      fprintf(f_pTestResultFile,  "        <testcase classname=\"%s.%s\" name=\"%s\" time=\"0\"/>\n",
+      fprintf(f_pTestResultFile,  "        <testcase classname=\"%s.%s\" name=\"%s\" time=\"%f\"/>\n",
               pPackageName,
               pSuite->pName,
-              (NULL != pTest->pName) ? pTest->pName : "");
+              (NULL != pTest->pName) ? pTest->pName : "",
+	      time_spent);
     } else {
       fprintf(f_pTestResultFile,
               "        <CUNIT_RUN_TEST_RECORD> \n"
               "          <CUNIT_RUN_TEST_SUCCESS> \n"
               "            <TEST_NAME> %s </TEST_NAME> \n"
+	      "		   <TEST_TIME> %f </TEST_TIME> \n"
               "          </CUNIT_RUN_TEST_SUCCESS> \n"
               "        </CUNIT_RUN_TEST_RECORD> \n",
-              pTest->pName);
+              pTest->pName, time_spent);
     }
   }
 
