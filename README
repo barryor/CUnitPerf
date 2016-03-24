@@ -1,3 +1,12 @@
+			CUnitPerf: Unit Testing with more
+			    Performance tracking
+
+Built entirely on top of CUnit (orignal README below) with 
+improvements to allow performance tracking with CI plugins
+
+
+--- Original README -----------------------------------------------
+
 
 			CUnit : A Unit Testing Framework
 			  http://cunit.sourceforge.net
